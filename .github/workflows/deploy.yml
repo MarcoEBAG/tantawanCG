@@ -1,0 +1,45 @@
+name: Deploy to Server (Variant 1)
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT || 22 }}
+        source: "./"
+        target: "${{ secrets.SSH_PATH }}"
+        exclude: |
+          .git/**
+          **/.git/**
+          **/node_modules/**
+          frontend/dist/**
+          backups/**
+          restore/**
+          .env
+          **/.DS_Store
+    - uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_KEY }}
+        port: ${{ secrets.SSH_PORT || 22 }}
+        script_stop: true
+        script: |
+          set -euo pipefail
+          cd "${{ secrets.SSH_PATH }}"
+          if ! command -v docker >/dev/null; then echo 'Docker fehlt'; exit 1; fi
+          if [ ! -f .env ]; then echo 'ERROR: .env fehlt'; exit 1; fi
+          docker build -t asia-frontend-prod:latest -f frontend/Dockerfile.prod frontend
+          CID=$(docker create asia-frontend-prod:latest)
+          docker run --rm -v frontend_dist:/dest --volumes-from "$CID" alpine sh -c "cp -r /* /dest/"
+          docker rm "$CID" || true
+          docker compose -f docker-compose.prod.yml up -d --build
+          curl -s -m 5 -X POST https://restaurant.bibabau.ch/api/dev/seed || true
