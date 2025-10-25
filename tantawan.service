@@ -1,0 +1,20 @@
+Unit]
+Description=Tantawan FastAPI (UVicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=tantawan
+Group=tantawan
+WorkingDirectory=/var/www/tantawan
+EnvironmentFile=/var/www/tantawan/backend/.env
+ExecStart=/var/www/tantawan/backend/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
